@@ -28,7 +28,7 @@ for index in reversed(linesToStrip):
 
 # reconstruct the file string
 
-out = '\n'.join(mainCode)
+out = ''.join(mainCode)
 
 # output the stripped file
 with open(outputPath,"w") as f:
