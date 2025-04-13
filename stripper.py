@@ -3,11 +3,14 @@ from config import *
 # Helper vars
 linesToStrip = []
 
+splicer = []
+latch = 0
+currentLine = 0
+
 temperatureFanBlacklist = ["M104", "M106", "M109", "M104","M190"]
-movementBlacklist = ["G1"]
 
 # Set to true to strip all of the gcode, otherwise the code will ignore the preheat/start routine
-startupComplete = True
+startupComplete = False
 
 # pull all lines out of the file
 with open(filePath,"r") as f:
@@ -16,9 +19,18 @@ with open(filePath,"r") as f:
 # Main line-wise loop
 for line in mainCode:
 
-    if "; (GhostPrint Flag) END STARTUP" in line:
+    # Check for slicer profile-implemented flag indicating end of startup sequence
+    if "; (GhostPrint Flag) END STARTUP" in line and startupComplete == False:
         startupComplete = True
 
+        # If we hit start sequence and Z axis is disabled, raise it so as to not drag nozzle on bed
+
+        if("Z" in knockoutAxes):
+            print("Inserting Z axis")
+            mainCode.insert(currentLine, "G1 Z2 F1000")
+            #mainCode.pop(currentLine + 1)
+
+    # Main splicing and stuff
     if startupComplete:
 
         if STRIP_MODE == 1:
@@ -27,56 +39,69 @@ for line in mainCode:
                 if item in line:
                     linesToStrip.append(mainCode.index(line))
 
-            # go backwards and remove lines to preserve the indicies
-            for index in reversed(linesToStrip):
-                mainCode.pop(index)
-
         elif STRIP_MODE == 2:
-            knockOut = []
             # motor knockouts
-            for item in movementBlacklist:
-                if item in line:
-                    
-                    # check for calls to the requested axes
-                    for axis in knockoutAxes:
+            if "G1" in line:
+                
+                splicer = list(line)
 
-                        # find the start and end index for where we need to remove
-                        startIndex = line.find(axis)
-                        endIndex = line.find(" ", startIndex)
+                for i in range(len(splicer)):
+                    for Axis in knockoutAxes:
+                        if splicer[i] == Axis:
+                            latch = 1
 
-                        if endIndex == -1:
-                            endIndex = len(line)
+                    if splicer[i] == " " and latch == 1:
+                        latch = 0
 
-                        line = line[:startIndex] + line[endIndex:]
+                    if latch == 1:
+                        splicer[i] = ""
 
-            
-            knockOut.append(line)
+            mainCode[mainCode.index(line)] = ''.join(splicer)
+            print("".join(splicer))
 
-
-        #TODO
         elif STRIP_MODE == 3:
-            # flag fan and temperature codes
-            for item in movementBlacklist:
+            # temperature/fans
+            for item in temperatureFanBlacklist:
                 if item in line:
                     linesToStrip.append(mainCode.index(line))
 
             # then knock out motor codes
+            # motor knockouts
+            if "G1" in line:
+                
+                splicer = list(line)
+
+                for i in range(len(splicer)):
+                    for Axis in knockoutAxes:
+                        if splicer[i] == Axis:
+                            latch = 1
+
+                    if splicer[i] == " " and latch == 1:
+                        latch = 0
+
+                    if latch == 1:
+                        splicer[i] = ""
+
+            mainCode[mainCode.index(line)] = ''.join(splicer)
+            #print("".join(splicer))
             
 
         else:
             print("Invalid strip mode")
-
-
-
+        
+    currentLine += 1
 
 
 # reconstruct the file string
-if STRIP_MODE == 1:
-    out = ''.join(mainCode)
+print("Starting compression to file")
+if STRIP_MODE == 1 or STRIP_MODE == 3:
+    # go backwards and remove lines to preserve the indicies
+    for index in reversed(linesToStrip):
+        mainCode.pop(index)
 
-elif STRIP_MODE == 2:
-    out = ''.join(knockOut)
+out = ''.join(mainCode)
 
+print("Attempting to write to file")
 # output the stripped file
 with open(outputPath,"w") as f:
     f.write(out)
