@@ -7,7 +7,7 @@ splicer = []
 latch = 0
 currentLine = 0
 
-temperatureFanBlacklist = ["M104", "M106", "M109", "M104","M190"]
+temperatureFanBlacklist = ["M104", "M106", "M109", "M104", "M190"]
 
 # Set to true to strip all of the gcode, otherwise the code will ignore the preheat/start routine
 startupComplete = False
@@ -24,13 +24,12 @@ for line in mainCode:
         startupComplete = True
 
         # If we hit start sequence and Z axis is disabled, raise it so as to not drag nozzle on bed
-
         if("Z" in knockoutAxes):
             print("Inserting Z axis")
             mainCode.insert(currentLine, "G1 Z2 F1000")
             #mainCode.pop(currentLine + 1)
 
-    # Main splicing and stuff
+    # Main loop for checking and stripping lines/commands
     if startupComplete:
 
         if STRIP_MODE == 1:
@@ -44,6 +43,7 @@ for line in mainCode:
             if "G1" in line:
                 
                 splicer = list(line)
+                latch = 0
 
                 for i in range(len(splicer)):
                     for Axis in knockoutAxes:
@@ -56,7 +56,8 @@ for line in mainCode:
                     if latch == 1:
                         splicer[i] = ""
 
-            mainCode[mainCode.index(line)] = ''.join(splicer)
+                mainCode[mainCode.index(line)] = ''.join(splicer)
+                
             print("".join(splicer))
 
         elif STRIP_MODE == 3:
@@ -70,6 +71,7 @@ for line in mainCode:
             if "G1" in line:
                 
                 splicer = list(line)
+                latch = 0
 
                 for i in range(len(splicer)):
                     for Axis in knockoutAxes:
@@ -82,8 +84,7 @@ for line in mainCode:
                     if latch == 1:
                         splicer[i] = ""
 
-            mainCode[mainCode.index(line)] = ''.join(splicer)
-            #print("".join(splicer))
+                mainCode[mainCode.index(line)] = ''.join(splicer)+"\n"
             
 
         else:
@@ -102,6 +103,7 @@ if STRIP_MODE == 1 or STRIP_MODE == 3:
 out = ''.join(mainCode)
 
 print("Attempting to write to file")
+
 # output the stripped file
 with open(outputPath,"w") as f:
     f.write(out)
